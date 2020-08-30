@@ -1,0 +1,52 @@
+Cassandra database acts as the serving layer database, storing all the results coming from Batch and the Speed Layer
+Purpose in Lambda Architecture:
+merge the output of speed and batch layer aggregations achieve this by:
+ - every couple of hours run the re-computation
+ - use the output of batch layer as base table
+ - upsert the up-to-date values of speed layer into the base table
+
+    DROP TABLE IF EXISTS serving_layer_temp;
+
+    // Batch layer table :: batch_activity_by_product
+    SELECT
+         *
+    INTO
+        serving_layer_temp
+    FROM
+        batch_activity_by_product ;
+
+
+    // Do not summarize is speed_layer
+    // speed layer tables :: stream_click_events
+>>>>> UPDATE OLD RECORDS TO SERVING LAYER <<<<<<<<<
+    UPDATE
+        serving_layer_temp
+    SET
+        purchase_count = purchase_count + stream_click_events.purchase_count,
+        add_to_cart_count = add_to_cart_count + stream_click_events.add_to_cart_count,
+        page_view_count = page_view_count + stream_click_events.page_view_count
+    FROM
+        stream_click_events
+    WHERE
+             serving_layer_temp.timestamp_hour = stream_click_events.timestamp_hour
+         and serving_layer_temp.product        = stream_click_events.product;
+
+>>>>> INSERT NEW RECORDS TO SERVING LAYER <<<<<<<<<
+    INSERT INTO
+        serving_layer_temp
+    SELECT
+        *
+    FROM
+        stream_click_events
+    WHERE
+        (stream_click_events.timestamp_hour,stream_click_events.product)
+    NOT IN (
+        SELECT
+            DISTINCT timestamp_hour,product
+        FROM
+            serving_layer_temp
+    ) ;
+    drop table serving_layer ;
+
+    alter table serving_layer_temp
+    rename to serving_layer ;

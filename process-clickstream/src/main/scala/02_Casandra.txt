@@ -1,0 +1,130 @@
++-----------------------------------------------------------------------------
+Cassandra setup in EC2 UNIX machine( single node)                                  
++-----------------------------------------------------------------------------
+sudo apt update
+sudo apt install openjdk-8-jdk
+java -version
+
+#Package that is necessary to access a repository over HTTPS:
+sudo apt install apt-transport-https
+
+#Add the Apache Cassandra repository.
+wget -q -O - https://www.apache.org/dist/cassandra/KEYS | sudo apt-key add -
+
+#Add the Cassandra repository to the system by issuing:
+sudo sh -c 'echo "deb http://www.apache.org/dist/cassandra/debian 311x main" > /etc/apt/sources.list.d/cassandra.list'
+
+#Once the repository is enabled, update the apt package list and install the latest version of Apache Cassandra by typing:
+sudo apt update
+sudo apt install cassandra
+
+#Check Cassandra is running?
+nodetool status
+
+# Update cassandra.yaml to access casandra 
+Step 1: sudo vi /etc/cassandra/cassandra.yaml
+
+		start_rpc: true
+
+		rpc_address: 0.0.0.0
+
+		broadcast_rpc_address: [node-ip]
+
+		listen_address: [node-ip]
+
+		seed_provider:
+		  - class_name: ...
+			- seeds: "[node-ip]"
+
+Step 2: Save the cassandra.yaml file.
+
+Step 3: Clear the default data from the Cassandra system table in order to import the new values set in the cassandra.yaml config file:
+sudo rm -rf /var/lib/cassandra/data/system/*
+
+Step 4: Restart Cassandra Service on that node.
+sudo service cassandra stop
+sudo service cassandra start
+# Wait for 10 second and check cluster status.
+sudo nodetool status
+
+
+
+#To interact with Cassandra through CQL (the Cassandra Query Language)
+$ cqlsh
+
+		1. Get keyspaces info
+
+		SELECT * FROM system_schema.keyspaces
+
+		2. Get tables info
+
+		SELECT * FROM system_schema.tables WHERE keyspace_name = 'dblambda';
+
+		3. Get table info
+
+		SELECT * FROM system_schema.columns 
+		WHERE keyspace_name = 'dblambda' AND table_name = 'table_name';
+
++-----------------------------------------------------------------------------
+Create using cqlsh                                   
++-----------------------------------------------------------------------------
+
+CREATE KEYSPACE IF NOT EXISTS dblambda
+WITH replication = {
+  'class':'SimpleStrategy',
+  'replication_factor':1
+};
+
+CREATE TABLE IF NOT EXISTS dblambda.stream_click_events ( 
+eventtime bigint,
+referrer text,
+action text,
+prevpage text,
+visitor text,
+page text,
+product text,
+timestamp_hour bigint,
+PRIMARY KEY (product, timestamp_hour) 
+) WITH CLUSTERING ORDER BY (timestamp_hour DESC);
+
++---------------------------------------------+-----------------+---------------+
+|product                                      |timestamp_hour   |unique_visitors|
++---------------------------------------------+-----------------+---------------+
+
+
+CREATE TABLE IF NOT EXISTS dblambda.stream_activity_by_product 
+( 
+product text, 
+timestamp_hour bigint, 
+purchase_count bigint, 
+add_to_cart_count bigint, 
+page_view_count bigint, 
+PRIMARY KEY (product, timestamp_hour) 
+) WITH CLUSTERING ORDER BY (timestamp_hour DESC);
+
+CREATE TABLE IF NOT EXISTS dblambda.stream_visitors_by_product ( 
+product text, 
+timestamp_hour bigint, 
+unique_visitors bigint, 
+PRIMARY KEY (product, timestamp_hour) 
+) WITH CLUSTERING ORDER BY (timestamp_hour DESC);
+
++------------------------------------------+-----------------+--------------+-----------------+---------------+
+|product                                   |timestamp_hour   |purchase_count|add_to_cart_count|page_view_count|
++------------------------------------------+-----------------+--------------+-----------------+---------------+
+
+CREATE TABLE IF NOT EXISTS dblambda.batch_activity_by_product ( 
+product text, 
+timestamp_hour bigint, 
+purchase_count bigint, 
+add_to_cart_count bigint, 
+page_view_count bigint, 
+PRIMARY KEY (product, timestamp_hour) 
+) WITH CLUSTERING ORDER BY (timestamp_hour DESC); 
+
+CREATE TABLE IF NOT EXISTS dblambda.batch_visitors_by_product ( 
+product text, 
+timestamp_hour bigint, 
+unique_visitors bigint, 
+PRIMARY KEY (product, timestamp_hour) 
+) WITH CLUSTERING ORDER BY (timestamp_hour DESC);
